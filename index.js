@@ -15,16 +15,26 @@ app.get('/', (req, res) => {  //req(uest) is information sent by user to server,
     `);
 });
 
-app.post('/', (req, res) => {  //handles POST method from the form
-    req.on('data', (data) => {  // works like an event listener
-        const parsed = data.toString('utf8').split('&'); //converts data from hex 
-        const formData = {};
-        for (let pair of parsed) {
-            const [key, value] = pair.split('=');
-            formData[key] = value;
-        }
-        console.log(formData);
-    });
+// Middleware (always takes three arguements: req, res, next)
+const bodyParser = (req, res, next) => { 
+    if (req.method ==='POST') {
+        req.on('data', (data) => {  // works like an event listener
+            const parsed = data.toString('utf8').split('&'); //converts data from hex 
+            const formData = {};
+            for (let pair of parsed) {
+                const [key, value] = pair.split('=');
+                formData[key] = value;
+            }
+            req.body = formData;
+            next();  // Called whenever we're ready to move on
+        });
+    } else {
+        next();
+    }
+};
+
+app.post('/', bodyParser, (req, res) => {  //handles POST method from the form
+    console.log(req.body);
     res.send("Account created");
 });
 
