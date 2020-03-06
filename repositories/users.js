@@ -1,5 +1,8 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const util = require('util');
+
+const scrypt = util.promisify(crypto.scrypt);
 
 class UsersRepository {
     constructor(filename) {   //called immediately when a new instance is created
@@ -21,9 +24,25 @@ class UsersRepository {
 
     async create(attrs) {
         attrs.id = this.randomId();
+        const salt = crypto.randomBytes(8).toString('hex');
+        const buf = await scrypt(attrs.password, salt, 64);
+
         const records = await this.getAll();  // retrieve array of users
-        records.push(attrs);  // add new user to array of users
+        const record = {
+            ...attrs,
+            password: `${buf.toString('hex')}.${salt}`
+        };
+        records.push(record);  // add new user to array of users
         await this.writeAll(records);  // write the updated 'records' array back to this.filename
+        
+        return record;
+    }
+
+    async comparePasswords(saved, supplied) {  // saved -> password saved in our database (hashed.salt); supplied -> password given by user trying to sign in  
+        const [hashed, salt] = saved.split('.');
+        const hashedSuppliedBuf = await scrypt(supplied, salt, 64);
+        
+        return hashed === hashedSuppliedBuf.toString('hex');
     }
 
     async writeAll(records) {
@@ -56,12 +75,24 @@ class UsersRepository {
         Object.assign(record, attrs);  // combines the key:value pairs of second parameter into first parameter object
         await this.writeAll(records);
     }
+
+    async getOneBy (filters) {
+        const records = await this.getAll();
+
+        for (let record of records) {
+            let found = true;
+
+            for (let key in filters) {
+                if (record[key] !== filters[key]) {
+                    found = false;
+                }
+            }
+
+            if (found) {
+                return record;
+            }
+        }
+    }
 }
 
-const test = async () => {
-    const repo = new UsersRepository('users.json');
-    await repo.update('eeeeee', {password: "mypassword"});
-    
-};
-
-test();
+module.exports = new UsersRepository('users.json');
